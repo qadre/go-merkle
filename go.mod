@@ -1,4 +1,4 @@
-module github.com/xsleonard/go-merkle
+module github.com/qadre/go-merkle
 
 go 1.12
 

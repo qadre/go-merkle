@@ -12,6 +12,12 @@ import (
 	"hash"
 )
 
+// ProofNode holds the node needed to verify something in the MerkleTree.
+type ProofNode struct {
+	Left bool
+	Hash []byte
+}
+
 // TreeOptions configures tree behavior
 type TreeOptions struct {
 	// EnableHashSorting modifies the tree's hash behavior to sort the hashes before concatenating them
@@ -157,6 +163,50 @@ func (tree *Tree) Generate(blocks [][]byte, hashf hash.Hash) error {
 	tree.Nodes = nodes
 	tree.Levels = levels
 	return nil
+}
+
+// GetMerkleProof gets all the nodes in the tree needed to verify the specified leaf exists in the tree.
+func (tree *Tree) GetMerkleProof(leafIndex uint) ([]ProofNode, error) {
+	leafCount := len(tree.leaves())
+	if leafCount == 0 {
+		return nil, errors.New("Tree is empty")
+	}
+
+	if leafIndex >= uint(leafCount) {
+		return nil, errors.New("node index is too big for node count")
+	}
+	height, _ := CalculateHeightAndNodeCount(uint64(leafCount))
+	index := 0
+	lastNodeInLevel := uint64(leafCount) - 1
+	offset := uint64(0)
+	nodes := []ProofNode{}
+
+	for level := height - 1; level > 0; level-- {
+		// only add hash if this isn't an odd end
+		if !(uint64(leafIndex) == lastNodeInLevel && (lastNodeInLevel+1)%2 == 1) {
+			if leafIndex%2 == 0 {
+				nodes = append(nodes, ProofNode{Left: false, Hash: tree.Nodes[offset+uint64(leafIndex)+1].Hash})
+
+			} else {
+				nodes = append(nodes, ProofNode{Left: true, Hash: tree.Nodes[offset+uint64(leafIndex)-1].Hash})
+			}
+			index++
+		}
+		leafIndex = leafIndex / 2
+		offset += lastNodeInLevel + 1
+		lastNodeInLevel = (lastNodeInLevel+1)/2 + (lastNodeInLevel+1)%2 - 1
+	}
+	return nodes, nil
+
+}
+
+// Returns a slice of the leaf nodes in the tree, if available, else nil
+func (tree *Tree) leaves() []Node {
+	if tree.Levels == nil {
+		return nil
+	} else {
+		return tree.Levels[len(tree.Levels)-1]
+	}
 }
 
 // Creates all the non-leaf nodes for a certain height. The number of nodes
