@@ -1,7 +1,5 @@
 go-merkle
 =========
-[![GoDoc](https://godoc.org/github.com/xsleonard/go-merkle?status.svg)](https://godoc.org/github.com/xsleonard/go-merkle)
-[![Travis CI](https://api.travis-ci.org/xsleonard/go-merkle.svg?branch=master)](https://travis-ci.org/xsleonard/go-merkle)
 
 A fixed Merkle Tree implementation in Go
 
@@ -16,7 +14,7 @@ import (
     "io/ioutil"
     "fmt"
 
-    "github.com/xsleonard/go-merkle"
+    "github.com/qadre/go-merkle"
 )
 
 func splitData(data []byte, size int) [][]byte {
