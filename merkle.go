@@ -45,21 +45,18 @@ type Node struct {
 
 // NewNode creates a node given a hash function and data to hash. If the hash function is nil, the data
 // will be added without being hashed.
-func NewNode(h hash.Hash, block []byte) (Node, error) {
+func NewNode(h hash.Hash, block []byte) Node {
 	if h == nil {
 		return Node{
 			Hash: block,
-		}, nil
+		}
 	}
 	if block == nil {
-		return Node{}, nil
+		return Node{}
 	}
 	defer h.Reset()
-	_, err := h.Write(block[:])
-	if err != nil {
-		return Node{}, err
-	}
-	return Node{Hash: h.Sum(nil)}, nil
+	h.Write(block[:])
+	return Node{Hash: h.Sum(nil)}
 }
 
 // Tree contains all nodes
@@ -125,7 +122,7 @@ func (tree *Tree) Height() uint64 {
 func (tree *Tree) Generate(blocks [][]byte, hashf hash.Hash) error {
 	blockCount := uint64(len(blocks))
 	if blockCount == 0 {
-		return errors.New("Empty tree")
+		return errors.New("empty tree")
 	}
 	height, nodeCount := CalculateHeightAndNodeCount(blockCount)
 	levels := make([][]Node, height)
@@ -134,14 +131,10 @@ func (tree *Tree) Generate(blocks [][]byte, hashf hash.Hash) error {
 	// Create the leaf nodes
 	for i, block := range blocks {
 		var node Node
-		var err error
 		if tree.Options.DisableHashLeaves {
-			node, err = NewNode(nil, block)
+			node = NewNode(nil, block)
 		} else {
-			node, err = NewNode(hashf, block)
-		}
-		if err != nil {
-			return err
+			node = NewNode(hashf, block)
 		}
 		nodes[i] = node
 	}
@@ -152,10 +145,7 @@ func (tree *Tree) Generate(blocks [][]byte, hashf hash.Hash) error {
 	h := height - 1
 	for ; h > 0; h-- {
 		below := levels[h]
-		wrote, err := tree.generateNodeLevel(below, current, hashf)
-		if err != nil {
-			return err
-		}
+		wrote := tree.generateNodeLevel(below, current, hashf)
 		levels[h-1] = current[:wrote]
 		current = current[wrote:]
 	}
@@ -213,7 +203,7 @@ func (tree *Tree) leaves() []Node {
 // is calculated to be 1/2 the number of nodes in the lower rung.  The newly
 // created nodes will reference their Left and Right children.
 // Returns the number of nodes added to current
-func (tree *Tree) generateNodeLevel(below []Node, current []Node, h hash.Hash) (uint64, error) {
+func (tree *Tree) generateNodeLevel(below []Node, current []Node, h hash.Hash) uint64 {
 	h.Reset()
 
 	end := (len(below) + (len(below) % 2)) / 2
@@ -229,26 +219,23 @@ func (tree *Tree) generateNodeLevel(below []Node, current []Node, h hash.Hash) (
 			right = &below[iright]
 			rightHash = right.Hash
 		}
-		node, err := tree.generateNode(below[ileft].Hash, rightHash, h)
-		if err != nil {
-			return 0, err
-		}
+		node := tree.generateNode(below[ileft].Hash, rightHash, h)
 		// Point the new node to its children and save
 		node.Left = left
 		node.Right = right
 		current[i] = node
 
 	}
-	return uint64(end), nil
+	return uint64(end)
 }
 
-func (tree *Tree) generateNode(left, right []byte, h hash.Hash) (Node, error) {
+func (tree *Tree) generateNode(left, right []byte, h hash.Hash) Node {
 	data := make([]byte, h.Size()*2)
 	if right == nil {
 		if !tree.Options.DoubleOddNodes {
 			b := data[:h.Size()]
 			copy(b, left)
-			return Node{Hash: b}, nil
+			return Node{Hash: b}
 		}
 		right = left
 	}

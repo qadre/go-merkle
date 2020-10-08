@@ -10,7 +10,6 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"hash"
 	"testing"
@@ -80,42 +79,6 @@ func (h notHash) Size() int {
 }
 func (h notHash) BlockSize() int {
 	return 32
-}
-
-// failingHash: always returns error on Write
-type failingHash struct {
-	SucceedFor int
-}
-
-var failingHashWriteAttempts int
-
-func newFailingHashAt(n int) failingHash {
-	failingHashWriteAttempts = 0
-	return failingHash{SucceedFor: n}
-}
-
-func newFailingHash() failingHash {
-	return newFailingHashAt(0)
-}
-
-func (h failingHash) Write(p []byte) (int, error) {
-	failingHashWriteAttempts++
-	if failingHashWriteAttempts > h.SucceedFor {
-		return 0, errors.New("Failed to write hash")
-	}
-
-	return 0, nil
-}
-func (h failingHash) Sum(p []byte) []byte {
-	return p
-}
-func (h failingHash) Reset() {
-}
-func (h failingHash) Size() int {
-	return 0
-}
-func (h failingHash) BlockSize() int {
-	return 0
 }
 
 func failNotEqual(t *testing.T, label string, input interface{},
@@ -375,9 +338,7 @@ func verifyGeneratedTree(t *testing.T, tree *Tree, h hash.Hash) {
 
 func verifyHashInNode(t *testing.T, tree *Tree, n Node, h hash.Hash) {
 	/* Given a node it verifies that the Node Hash was calculated correctly */
-	nn, err := tree.generateNode(n.Left.Hash, n.Right.Hash, h)
-
-	assert.Nil(t, err)
+	nn := tree.generateNode(n.Left.Hash, n.Right.Hash, h)
 	assert.Equal(t, nn.Hash, n.Hash, "calculated Hash needs to match generated one")
 }
 
@@ -389,28 +350,18 @@ func verifyInitialState(t *testing.T, tree *Tree) {
 func TestNewNode(t *testing.T) {
 	h := NewSimpleHash()
 	block := createDummyTreeData(1, h.Size(), true)[0]
-	n, err := NewNode(h, block)
-	assert.Nil(t, err)
+	n := NewNode(h, block)
 	assert.Equal(t, bytes.Equal(n.Hash, block), true)
 
 	// Passing a nil hash function should create a node with the unhashed block
-	n, err = NewNode(nil, block)
-	assert.Nil(t, err)
+	n = NewNode(nil, block)
 	assert.Equal(t, n.Hash, block)
 
 	// Any nil argument should return blank node, no error
-	n, err = NewNode(nil, nil)
-	assert.Nil(t, err)
+	n = NewNode(nil, nil)
 	assert.Nil(t, n.Hash)
-	n, err = NewNode(h, nil)
-	assert.Nil(t, err)
+	n = NewNode(h, nil)
 	assert.Nil(t, n.Hash)
-
-	// Check hash error handling
-	h = newFailingHash()
-	n, err = NewNode(h, block)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "Failed to write hash")
 }
 
 func TestNewTree(t *testing.T) {
@@ -432,7 +383,7 @@ func TestTreeUngenerated(t *testing.T) {
 	// If data is nil, it should handle that:
 	err := tree.Generate(nil, NewSimpleHash())
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "Empty tree")
+	assert.Equal(t, err.Error(), "empty tree")
 	assert.Nil(t, tree.Leaves())
 	assert.Nil(t, tree.Root())
 	assert.Equal(t, tree.Height(), uint64(0))
@@ -455,7 +406,7 @@ func TestTreeGenerate(t *testing.T) {
 	// Generating with no blocks should return error
 	err = tree.Generate(make([][]byte, 0, 1), h)
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "Empty tree")
+	assert.Equal(t, err.Error(), "empty tree")
 }
 
 func TestTree_GenerateSingleLeaf(t *testing.T) {
@@ -509,8 +460,7 @@ func TestGenerateNodeHashOfUnbalance(t *testing.T) {
 	h := NewSimpleHash()
 
 	sampleLeft := []byte{203, 225, 206, 227, 57, 204, 31, 188, 40, 131, 158, 32, 174, 43, 15, 187, 176, 223, 90, 55, 162, 35, 25, 177, 219, 173, 93, 54, 138, 119, 188, 56}
-	n, err := tree.generateNode(sampleLeft, nil, h)
-	assert.Nil(t, err)
+	n := tree.generateNode(sampleLeft, nil, h)
 	assert.Equal(t, sampleLeft, n.Hash)
 }
 
@@ -526,9 +476,8 @@ func TestGenerateNodeHashOrdered(t *testing.T) {
 	copy(data[:h.Size()], sampleRight)
 	copy(data[h.Size():], sampleLeft)
 
-	expected, _ := NewNode(h, data)
-	n, err := tree.generateNode(sampleLeft, sampleRight, h)
-	assert.Nil(t, err)
+	expected := NewNode(h, data)
+	n := tree.generateNode(sampleLeft, sampleRight, h)
 	assert.Equal(t, expected.Hash, n.Hash)
 }
 
@@ -542,9 +491,8 @@ func TestGenerateNodeHashStandard(t *testing.T) {
 	copy(data[:h.Size()], sampleRight)
 	copy(data[h.Size():], sampleLeft)
 
-	expected, _ := NewNode(h, data)
-	n, err := tree.generateNode(sampleLeft, sampleRight, h)
-	assert.Nil(t, err)
+	expected := NewNode(h, data)
+	n := tree.generateNode(sampleLeft, sampleRight, h)
 	assert.Equal(t, expected.Hash, n.Hash)
 }
 
@@ -566,22 +514,7 @@ func TestHashOrderedTreeGenerate(t *testing.T) {
 	// Generating with no blocks should return error
 	err = tree.Generate(make([][]byte, 0, 1), NewSimpleHash())
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "Empty tree")
-}
-
-func TestGenerateFailedHash(t *testing.T) {
-	tree := NewTree()
-	data := createDummyTreeData(16, 16, true)
-	// Fail hash during the leaf generation
-	err := tree.Generate(data, newFailingHash())
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "Failed to write hash")
-
-	// Fail hash during internal node generation
-	data = createDummyTreeData(16, 16, true)
-	err = tree.Generate(data, newFailingHashAt(20))
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "Failed to write hash")
+	assert.Equal(t, err.Error(), "empty tree")
 }
 
 func TestGetNodesAtHeight(t *testing.T) {
